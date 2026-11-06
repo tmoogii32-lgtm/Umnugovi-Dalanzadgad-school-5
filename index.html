@@ -37,6 +37,7 @@
           <h2 id="hello"></h2>
           <button class="link" id="logout">Сурагч солих</button>
         </div>
+        <p class="overall" id="overall"></p>
         <div class="grid" id="chapter-list"></div>
       </div>
     </section>
@@ -46,8 +47,9 @@
       <div class="panel">
         <button class="link" id="back-to-chapters">← Бүлгүүд</button>
         <h2 id="chapter-title"></h2>
-        <p class="muted">Ээлжит сэдвээ сонгоорой.</p>
-        <div class="grid" id="topic-list"></div>
+        <p class="muted">Сэдэв бүр 4 түвшинтэй: 🌱 Суурь → 🌿 Дунд → 🌳 Ахисан → 🏆 Гүнзгий.
+          Түвшин бүрт 5 бодлого байх ба <b>4-өөс дээш зөв</b> бодвол дараагийн түвшин нээгдэнэ.</p>
+        <div class="topic-list" id="topic-list"></div>
       </div>
     </section>
 
@@ -55,9 +57,13 @@
     <section class="screen" id="screen-quiz">
       <div class="panel">
         <div class="row-between">
-          <span class="badge" id="quiz-topic"></span>
+          <div class="badges">
+            <span class="badge" id="quiz-topic"></span>
+            <span class="badge" id="quiz-level"></span>
+          </div>
           <button class="link" id="quit-quiz">✕ Гарах</button>
         </div>
+        <p class="muted small" id="quiz-level-desc"></p>
         <div class="progress"><div id="progress-bar"></div></div>
         <p class="muted" id="progress-text"></p>
 
@@ -78,11 +84,12 @@
           <div class="emoji" id="result-emoji"></div>
           <div>
             <p class="muted" id="result-topic"></p>
-            <div class="score" id="result-score"></div>
+            <div class="score"><span id="result-score"></span> <span class="pass-badge" id="result-badge"></span></div>
             <div class="muted" id="result-pct"></div>
           </div>
         </div>
         <p class="result-msg" id="result-msg"></p>
+        <div class="level-track" id="result-levels"></div>
         <p class="mistake" id="result-mistakes" hidden></p>
         <div class="table-wrap">
           <table>
@@ -92,8 +99,10 @@
         </div>
         <p class="send-status" id="send-status"></p>
         <div class="actions">
-          <button class="btn primary" id="btn-retry">🔁 Энэ сэдвийг дахин</button>
-          <button class="btn" id="btn-other">Өөр сэдэв</button>
+          <button class="btn primary" id="btn-nextlevel" hidden>Дараагийн түвшин →</button>
+          <button class="btn primary" id="btn-retry">🔁 Дахин оролдох</button>
+          <button class="btn" id="btn-prevlevel" hidden>↩ Өмнөх түвшинг давтах</button>
+          <button class="btn" id="btn-other">Сэдвүүд</button>
           <button class="btn" id="btn-chapters">Бүлгүүд</button>
         </div>
       </div>

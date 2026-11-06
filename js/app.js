@@ -6,11 +6,44 @@
   const CUR = window.CURRICULUM;
   const { N, gcd } = window.MathUtil;
   const TOTAL = CFG.PROBLEMS_PER_SESSION || 5;
+  const LEVELS = window.LEVELS;
+  const PASS = CFG.PASS_SCORE || 4; // дараагийн түвшин нээгдэх доод оноо
+  const PASS_PCT = Math.round((PASS / TOTAL) * 100);
   const QUEUE_KEY = 'math7_pending_results';
   const STUDENT_KEY = 'math7_student';
 
   const $ = (id) => document.getElementById(id);
-  const state = { student: null, chapter: null, topic: null, problems: [], idx: 0, results: [], sessionStart: 0, qStart: 0, checked: false };
+  const state = { student: null, chapter: null, topic: null, level: 1, problems: [], idx: 0, results: [], sessionStart: 0, qStart: 0, checked: false, progress: {} };
+
+  // ---------------- Ахиц (түвшин бүрийн хамгийн өндөр хувь) ----------------
+  // progress = { [topicId]: { [level]: bestPercent } }
+  const progressKey = () => `math7_progress_${state.student.cls}|${state.student.name.toLowerCase()}`;
+  function loadProgress() { state.progress = JSON.parse(localStorage.getItem(progressKey()) || '{}'); }
+  function saveProgress() { localStorage.setItem(progressKey(), JSON.stringify(state.progress)); }
+  function best(topicId, L) { return (state.progress[topicId] || {})[L]; }
+  function recordBest(topicId, L, pct) {
+    const t = (state.progress[topicId] = state.progress[topicId] || {});
+    if (t[L] === undefined || pct > t[L]) t[L] = pct;
+  }
+  const passed = (topicId, L) => (best(topicId, L) || 0) >= PASS_PCT;
+  const unlocked = (topicId, L) => CFG.LOCK_LEVELS === false || L === 1 || passed(topicId, L - 1);
+  const passedCount = (topic) => LEVELS.filter((lv) => passed(topic.id, lv.n)).length;
+  // Сурагчийн одоо бодох ёстой түвшин (давсан түвшний дараагийнх)
+  const currentLevel = (topic) => Math.min(passedCount(topic) + 1, LEVELS.length);
+
+  // Өөр компьютер дээр бодсон ахицыг Sheet-ээс татах
+  async function syncProgress() {
+    if (!CFG.SCRIPT_URL) return;
+    try {
+      const resp = await fetch(CFG.SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'progress', student: state.student.name, cls: state.student.cls }) });
+      const data = await resp.json();
+      if (!data.ok || !data.progress) return;
+      Object.entries(data.progress).forEach(([tid, lv]) => Object.entries(lv).forEach(([L, pct]) => recordBest(tid, Number(L), Number(pct))));
+      saveProgress();
+      if ($('screen-chapter').classList.contains('active')) renderChapters();
+      if ($('screen-topic').classList.contains('active')) renderTopics();
+    } catch (e) { /* интернэтгүй үед орон нутгийн ахицаар үргэлжилнэ */ }
+  }
 
   // ---------------- Дэлгэц солих ----------------
   function show(id) {
@@ -40,7 +73,9 @@
       if (name.length < 2) { $('student-name').focus(); return; }
       state.student = { name, cls: sel.value };
       localStorage.setItem(STUDENT_KEY, JSON.stringify(state.student));
+      loadProgress();
       renderChapters();
+      syncProgress();
     });
   }
 
@@ -49,40 +84,58 @@
     $('hello').textContent = `Сайн уу, ${state.student.name} (${state.student.cls})! Бүлгээ сонгоорой.`;
     const box = $('chapter-list');
     box.innerHTML = '';
+    let allDone = 0, allTotal = 0;
     CUR.forEach((ch) => {
+      const done = ch.topics.reduce((s, t) => s + passedCount(t), 0), total = ch.topics.length * LEVELS.length;
+      allDone += done; allTotal += total;
       const b = document.createElement('button');
       b.className = 'card-btn';
-      b.innerHTML = `<span class="icon">${ch.icon}</span><span><b></b><small>${ch.topics.length} сэдэв</small></span>`;
+      b.innerHTML = `<span class="icon">${ch.icon}</span><span class="grow"><b></b><small>${ch.topics.length} сэдэв · ${done}/${total} түвшин</small><span class="mini-bar"><span style="width:${(done / total) * 100}%"></span></span></span>`;
       b.querySelector('b').textContent = ch.title;
       b.onclick = () => { state.chapter = ch; renderTopics(); };
       box.appendChild(b);
     });
+    $('overall').innerHTML = `Нийт ахиц: <b>${allDone} / ${allTotal}</b> түвшин <span class="mini-bar wide"><span style="width:${(allDone / allTotal) * 100}%"></span></span>`;
     show('screen-chapter');
   }
 
-  // ---------------- 3. Сэдэв сонгох ----------------
+  // ---------------- 3. Сэдэв ба түвшин сонгох ----------------
   function renderTopics() {
     $('chapter-title').textContent = `${state.chapter.icon} ${state.chapter.title}`;
     const box = $('topic-list');
     box.innerHTML = '';
     state.chapter.topics.forEach((t, i) => {
-      const b = document.createElement('button');
-      b.className = 'card-btn';
-      b.innerHTML = `<span class="num">${i + 1}</span><span><b></b><small>${TOTAL} бодлого</small></span>`;
-      b.querySelector('b').textContent = t.title;
-      b.onclick = () => startQuiz(t);
-      box.appendChild(b);
+      const card = document.createElement('div');
+      card.className = 'topic-card';
+      const done = passedCount(t);
+      card.innerHTML = `<div class="topic-head"><span class="num">${i + 1}</span><b></b><span class="stars">${done === LEVELS.length ? '🏅 Бүрэн эзэмшсэн' : `${done}/${LEVELS.length}`}</span></div><div class="levels"></div>`;
+      card.querySelector('b').textContent = t.title;
+      const lvBox = card.querySelector('.levels');
+      const cur = currentLevel(t);
+      LEVELS.forEach((lv) => {
+        const btn = document.createElement('button');
+        const open = unlocked(t.id, lv.n), ok = passed(t.id, lv.n), b = best(t.id, lv.n);
+        btn.className = `level-btn${ok ? ' done' : ''}${!open ? ' locked' : ''}${open && !ok && lv.n === cur ? ' current' : ''}`;
+        btn.disabled = !open;
+        btn.title = (t.levels && t.levels[lv.n - 1]) || '';
+        btn.innerHTML = `<span class="lv-icon">${!open ? '🔒' : ok ? '✅' : lv.icon}</span><span class="lv-name">${lv.n}. ${lv.name}</span><small></small>`;
+        btn.querySelector('small').textContent = b !== undefined ? `Шилдэг: ${b}%` : (t.levels ? t.levels[lv.n - 1] : '');
+        btn.onclick = () => startQuiz(t, lv.n);
+        lvBox.appendChild(btn);
+      });
+      box.appendChild(card);
     });
     show('screen-topic');
   }
 
   // ---------------- 4. Бодлого ----------------
-  function startQuiz(topic) {
+  function startQuiz(topic, level) {
     state.topic = topic;
+    state.level = level || currentLevel(topic);
     state.problems = [];
     const seen = new Set();
     for (let tries = 0; state.problems.length < TOTAL && tries < 200; tries++) {
-      const p = topic.gen();
+      const p = topic.gen(state.level);
       if (seen.has(p.text)) continue;
       seen.add(p.text);
       state.problems.push(p);
@@ -90,7 +143,11 @@
     state.idx = 0;
     state.results = [];
     state.sessionStart = Date.now();
+    const lv = LEVELS[state.level - 1];
     $('quiz-topic').textContent = topic.title;
+    $('quiz-level').textContent = `${lv.icon} Түвшин ${lv.n}: ${lv.name}`;
+    $('quiz-level').className = `badge level-${lv.n}`;
+    $('quiz-level-desc').textContent = (topic.levels && topic.levels[state.level - 1]) || '';
     renderProblem();
     show('screen-quiz');
   }
@@ -125,7 +182,7 @@
       inp.id = 'answer-input';
       inp.type = 'text';
       inp.autocomplete = 'off';
-      inp.inputMode = p.type === 'number' ? 'decimal' : 'text';
+      inp.inputMode = 'text'; // утсан дээр "-" ба "/" бичигдэх боломжтой байлгана
       inp.placeholder = p.hint || 'Хариугаа бичнэ үү';
       inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); onCheckClick(); } });
       area.appendChild(inp);
@@ -151,6 +208,13 @@
   }
 
   function parseNumber(raw) {
+    // Холимог тоо: "2 1/3" эсвэл "-2 1/3"
+    const mx = String(raw).trim().replace(/[−–—]/g, '-').match(/^(-?)\s*(\d+)\s+(\d+)\s*\/\s*(\d+)$/);
+    if (mx) {
+      const w = Number(mx[2]), n = Number(mx[3]), d = Number(mx[4]);
+      if (d === 0) return null;
+      return { val: (mx[1] ? -1 : 1) * (w + n / d), reducible: gcd(n, d) > 1 };
+    }
     let s = normalize(raw);
     s = s.replace(/^x=/, '').replace(/[^0-9.\-\/]/g, '');
     let m = s.match(/^(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)$/);
@@ -299,7 +363,7 @@
         method: 'POST',
         body: JSON.stringify({
           action: 'feedback',
-          topic: state.topic.title,
+          topic: `${state.topic.title} (түвшин ${state.level}/4: ${LEVELS[state.level - 1].name})`,
           question: plain(p.text),
           studentAnswer: raw,
           correctAnswer: answerPlain(p),
@@ -329,17 +393,49 @@
     const correct = state.results.filter((r) => r.correct).length;
     const pct = Math.round((correct / TOTAL) * 100);
     const totalSec = Math.round((Date.now() - state.sessionStart) / 1000);
+    const L = state.level, lv = LEVELS[L - 1], isPass = correct >= PASS, wasPassed = passed(state.topic.id, L);
+    recordBest(state.topic.id, L, pct);
+    saveProgress();
+
     let emoji, msg;
-    if (pct === 100) { emoji = '🏆'; msg = 'Гайхалтай! Та энэ сэдвийг бүрэн эзэмшжээ. Дараагийн сэдэв рүү шилжээрэй.'; }
-    else if (pct >= 80) { emoji = '🌟'; msg = 'Маш сайн! Буруу бодсон бодлогынхоо тайлбарыг дахин уншаарай.'; }
-    else if (pct >= 60) { emoji = '👍'; msg = 'Сайн байна, гэхдээ бага зэрэг давтлага хэрэгтэй. Энэ сэдвийг дахин нэг бодоорой.'; }
-    else { emoji = '💪'; msg = 'Бүү бууж өг! Алхмуудыг анхааралтай уншаад энэ сэдвийг дахин бодоорой. Багшаасаа тусламж аваарай.'; }
+    if (isPass && L < LEVELS.length) {
+      const nx = LEVELS[L];
+      emoji = pct === 100 ? '🏆' : '🌟';
+      msg = wasPassed
+        ? `Сайн байна! Та ${lv.name} түвшинг дахин амжилттай давлаа. ${nx.icon} ${nx.name} түвшин рүү ороорой.`
+        : `Баяр хүргэе! Та ${lv.name} түвшинг давлаа. ${nx.icon} Түвшин ${nx.n}: ${nx.name} нээгдлээ!`;
+    } else if (isPass) {
+      emoji = '🏅';
+      msg = 'Гайхалтай! Та энэ сэдвийн бүх 4 түвшинг давж, сэдвийг бүрэн эзэмшлээ. Дараагийн сэдэв рүү шилжээрэй.';
+    } else if (pct >= 40) {
+      emoji = '👍';
+      msg = `Ойрхон байна! Дараагийн түвшин нээгдэхийн тулд ${TOTAL}-аас дор хаяж ${PASS}-ийг зөв бодох хэрэгтэй. Алдаагаа тайлбартай нь харьцуулаад дахин оролдоорой.`;
+    } else {
+      emoji = '💪';
+      msg = `Бүү бууж өг! Алхмуудыг анхааралтай уншаад энэ түвшинг дахин бодоорой.${L > 1 ? ' Хэрэв хэцүү байвал өмнөх түвшингээ давтаж болно.' : ''} Багшаасаа тусламж аваарай.`;
+    }
 
     $('result-emoji').textContent = emoji;
     $('result-score').textContent = `${correct} / ${TOTAL}`;
     $('result-pct').textContent = `${pct}%  ·  ${Math.floor(totalSec / 60)} мин ${totalSec % 60} сек`;
     $('result-msg').textContent = msg;
-    $('result-topic').textContent = `${state.chapter.title} → ${state.topic.title}`;
+    $('result-topic').textContent = `${state.chapter.title} → ${state.topic.title} · ${lv.icon} Түвшин ${L}: ${lv.name}`;
+    $('result-badge').textContent = isPass ? '✅ ТЭНЦСЭН' : '⏳ ДАХИН ОРОЛДОХ';
+    $('result-badge').className = `pass-badge ${isPass ? 'ok' : 'bad'}`;
+
+    // Түвшний ахицын зураглал
+    $('result-levels').innerHTML = LEVELS.map((x) => {
+      const cls = passed(state.topic.id, x.n) ? 'done' : unlocked(state.topic.id, x.n) ? 'open' : 'locked';
+      return `<span class="lv-step ${cls}${x.n === L ? ' here' : ''}">${cls === 'done' ? '✅' : cls === 'locked' ? '🔒' : x.icon} ${x.n}. ${x.name}</span>`;
+    }).join('<span class="lv-arrow">→</span>');
+
+    // Товчлуурууд
+    const canNext = isPass && L < LEVELS.length;
+    $('btn-nextlevel').hidden = !canNext;
+    if (canNext) $('btn-nextlevel').textContent = `${LEVELS[L].icon} Түвшин ${L + 1}: ${LEVELS[L].name} →`;
+    $('btn-retry').textContent = isPass ? '🔁 Энэ түвшинг дахин' : '🔁 Дахин оролдох';
+    $('btn-retry').className = canNext ? 'btn' : 'btn primary';
+    $('btn-prevlevel').hidden = isPass || L === 1;
 
     const tbody = $('result-table');
     tbody.innerHTML = '';
@@ -369,6 +465,10 @@
       cls: state.student.cls,
       chapter: state.chapter.title,
       topic: state.topic.title,
+      topicId: state.topic.id,
+      level: L,
+      levelName: lv.name,
+      passed: isPass,
       correct,
       total: TOTAL,
       percent: pct,
@@ -425,7 +525,9 @@
     $('btn-next').onclick = next;
     $('back-to-chapters').onclick = renderChapters;
     $('quit-quiz').onclick = () => { if (confirm('Бодлогоо дуусгалгүй гарах уу? Үр дүн хадгалагдахгүй.')) renderTopics(); };
-    $('btn-retry').onclick = () => startQuiz(state.topic);
+    $('btn-retry').onclick = () => startQuiz(state.topic, state.level);
+    $('btn-nextlevel').onclick = () => startQuiz(state.topic, state.level + 1);
+    $('btn-prevlevel').onclick = () => startQuiz(state.topic, state.level - 1);
     $('btn-other').onclick = renderTopics;
     $('btn-chapters').onclick = renderChapters;
     $('logout').onclick = () => show('screen-login');
