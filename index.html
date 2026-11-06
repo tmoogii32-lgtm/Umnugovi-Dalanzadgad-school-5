@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Математик 7 — Багшийн туслах</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🧮 <span>Математик 7 · Багшийн туслах</span></div>
+    <div class="school" id="school-name"></div>
+  </header>
+
+  <main>
+    <!-- 1. Нэвтрэх -->
+    <section class="screen active" id="screen-login">
+      <div class="panel narrow">
+        <h1>Хоцрогдлоо нөхье! 🚀</h1>
+        <p class="muted">Сэдвээ сонгоод 5 бодлого бодоорой. Бодлого бүрийн дараа хэрхэн бодохыг алхам алхмаар тайлбарлана.</p>
+        <form id="login-form">
+          <label>Овог нэр
+            <input id="student-name" type="text" placeholder="Жишээ: Б. Тэмүүлэн" required maxlength="60" autocomplete="name" />
+          </label>
+          <label>Анги
+            <select id="student-class"></select>
+          </label>
+          <button class="btn primary" type="submit">Эхлэх →</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- 2. Бүлэг -->
+    <section class="screen" id="screen-chapter">
+      <div class="panel">
+        <div class="row-between">
+          <h2 id="hello"></h2>
+          <button class="link" id="logout">Сурагч солих</button>
+        </div>
+        <div class="grid" id="chapter-list"></div>
+      </div>
+    </section>
+
+    <!-- 3. Сэдэв -->
+    <section class="screen" id="screen-topic">
+      <div class="panel">
+        <button class="link" id="back-to-chapters">← Бүлгүүд</button>
+        <h2 id="chapter-title"></h2>
+        <p class="muted">Ээлжит сэдвээ сонгоорой.</p>
+        <div class="grid" id="topic-list"></div>
+      </div>
+    </section>
+
+    <!-- 4. Бодлого -->
+    <section class="screen" id="screen-quiz">
+      <div class="panel">
+        <div class="row-between">
+          <span class="badge" id="quiz-topic"></span>
+          <button class="link" id="quit-quiz">✕ Гарах</button>
+        </div>
+        <div class="progress"><div id="progress-bar"></div></div>
+        <p class="muted" id="progress-text"></p>
+
+        <div class="problem" id="problem-text"></div>
+        <div class="answer-area" id="answer-area"></div>
+        <button class="btn primary" id="btn-check">Шалгах</button>
+
+        <div class="feedback" id="feedback" hidden></div>
+        <div class="ai-box" id="ai-box" hidden></div>
+        <button class="btn primary" id="btn-next" hidden>Дараагийн бодлого →</button>
+      </div>
+    </section>
+
+    <!-- 5. Үр дүн -->
+    <section class="screen" id="screen-result">
+      <div class="panel">
+        <div class="result-head">
+          <div class="emoji" id="result-emoji"></div>
+          <div>
+            <p class="muted" id="result-topic"></p>
+            <div class="score" id="result-score"></div>
+            <div class="muted" id="result-pct"></div>
+          </div>
+        </div>
+        <p class="result-msg" id="result-msg"></p>
+        <p class="mistake" id="result-mistakes" hidden></p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>№</th><th>Бодлого</th><th>Таны хариу</th><th>Зөв хариу</th><th></th></tr></thead>
+            <tbody id="result-table"></tbody>
+          </table>
+        </div>
+        <p class="send-status" id="send-status"></p>
+        <div class="actions">
+          <button class="btn primary" id="btn-retry">🔁 Энэ сэдвийг дахин</button>
+          <button class="btn" id="btn-other">Өөр сэдэв</button>
+          <button class="btn" id="btn-chapters">Бүлгүүд</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/curriculum.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
